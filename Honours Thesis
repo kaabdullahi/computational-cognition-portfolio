@@ -1,0 +1,130 @@
+## this removes all current variables in the environment, do run if you need stuff
+rm(list = ls())
+## used for data manipulation
+require(dplyr)
+## used for bayesian ANOVA
+require(BayesFactor)
+## used for bf inclusion
+require(bayestestR)
+## used for plots 
+require(ggplot2)
+require(car)
+## sets wd to current folder location 
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+data = read.csv("fulldata.csv")
+## makes sure our factor variables are actually factors, otherwise
+## anova wont run properly
+data2 = data %>% 
+  mutate(dyad = as.factor(dyad), 
+         block = as.factor(block))
+####----Function for RM models----####
+
+generateBayesStuff = function(DV, data){
+  formulaOBJ = as.formula(paste(DV, "~ block * dyad"))
+  
+  anovaOBJ = anovaBF(formulaOBJ, data = data, rscaleRandom = "nuisance", whichRandom = "dyad")
+  print(summary(anovaOBJ))
+  
+  ## Inclusion stuff
+  bfinc = bf_inclusion(anovaOBJ)
+  print(bfinc)
+  
+  ## Posterior probs 
+  nlevels = length(levels(data$block))
+  pH0 = .5^(2/nlevels)
+  prior_odds = (1 - pH0)/pH0
+  bf = exp(bfinc[2,3])
+  post_odds = format(bf * prior_odds, scientific = TRUE)
+  post_odds_text = paste0("Posterior Odds: ", post_odds)
+  print(post_odds_text)
+  
+  estimates = as.data.frame(posterior(anovaOBJ, iterations = 1000))
+  print(paste0(" | grand mean:", mean(estimates$mu), " | collab diff:", 
+               mean(estimates$`block-collab`), 
+               " | sep diff:", mean(estimates$`block-sep`), " | "))
+}
+####----actually generating the models----####
+generateBayesStuff("totalTasks", data2)
+
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = sd(x[[col]], na.rm=TRUE))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- rename(data_sum, c("mean" = varname))
+  return(data_sum)
+}
+data_RT = data_summary(data2, varname = "meanRT", groupnames = "block")  
+errorBarPlot = ggplot(data_RT, aes(x = block, y = meanRT)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = meanRT - sd, ymax = meanRT + sd))
+
+errorBarPlot
+
+
+
+
+
+
+% Matlab code for calculating and plotting the sampling distribution of 
+% the distance-from-optimality in Little & Eidels scheduling data, 4/6/2020
+%
+% Ami Eidels, updated 22/9/2024
+
+clear all;; close all; clc
+
+ntrials = 200000; % number of simulated trials
+
+% define the Optiaml Order of task-completion (1= easy, 4= hardest)
+%
+%optimalOrder = [1 2 3 4];
+optimalOrder = [1 2 3 4 5 6 7 8];
+
+
+% generate synthetic data, whereby on each 'trial' the order of four tasks
+% is obtained by randoamlly permuting the optimal order. 
+% Can be done faster as matrix but i preferred Loop so i can check each step
+tic
+for n = 1: ntrials;
+    
+    % ONE TRIAL, a sinlge permutation of the optimal order
+    temp = randperm(length(optimalOrder)); 
+    simData(n, :) = temp;
+    
+    % calculating the difference between EACH entry in the optimal and
+    % permuted string (this gives four values which we will later sum)
+    diffScore(n, :) = temp - optimalOrder;
+    
+end
+toc
+% calcualting, for each trial, the sum across four distances (consider
+% ^2 instead of abs)
+totalDiff = sum(abs(diffScore), 2);
+%totalDiff = sqrt(sum((diffScore.^2), 2));
+
+% Plotting the sampling distribution
+figure; 
+xAxis = min(totalDiff):max(totalDiff)
+bar ( xAxis, hist(totalDiff, xAxis) / ntrials );
+title('sampling distribution of distance-from-optimality');
+xlabel('distance-from-optimality') 
+ylabel('probability')
+
+
+% HOW TO USE:
+% now that we have the sampling distribution of the
+% distance-from-optimality, we can examine where the empirical value sits 
+% (either visually, on the figure, or by Inverse Percentile)
+%
+% If, for exmaple, we observe a participant with mean score of 8, we know
+% they are very far from optimal, and can calculate p in a similar manner
+% to the way we use t or F dist'. The PROBLEM is that the measure is very
+% coarse, it can only take some of the values between 0:8
+%%
+
+
+
+
